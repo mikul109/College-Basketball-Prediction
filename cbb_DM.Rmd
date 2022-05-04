@@ -1,0 +1,371 @@
+---
+title: '**College Basketball Prediction**'
+output:
+  html_notebook: default
+  pdf_document: default
+---
+### Data Mining Final Project
+
+**By: Mikul Muzumdar, Alec Plante, Johnson Feng, Leon Masin, Sumukh Shankar**
+
+Data from https://www.kaggle.com/datasets/andrewsundberg/college-basketball-dataset
+
+`GitHub repo: https://github.com/mikul109/College-Basketball-Prediction`
+
+```{r}
+# Dependencies:
+library(tidyverse)
+library(data.table)
+library(plotly)
+library(corrplot)
+library(leaps)
+library(nnet)
+library(e1071)
+library(partykit)
+library(class)
+library(xgboost)
+library(caret)
+```
+
+
+<br>
+ 
+| **Objective:**
+|   Use historical college basketball data to predict March Madness results
+
+| **Steps:**
+|     I. [Explore Dataset](#I)
+|     II. [Data Preprocessing](#II)
+|         1. [Cleaning](#II.1)
+|         2. [Reduce Dimensionality](#II.2)
+|     III. [Build and Test Classification Models](#III)
+|         1. [Logistic Regression](#III.1)
+|         2. [Support Vector Machine](#III.2)
+|         3. [Decision Tree](#III.3)
+|         4. [K-Nearest-Neighbors](#III.4)
+|         5. [XGBoost](#III.5)
+|     IV. [Visualize and Analyze results](#IV)
+
+<br>
+
+
+## I. Data Exploration {#I}
+
+```{r}
+# set directory
+setwd("~/Rutgers/8th Semester/Data Mining/Project/Project")
+
+# load data
+cbb <- read.csv("cbb.csv")
+setDT(cbb)
+```
+Data from the 2013, 2014, 2015, 2016, 2017, 2018, and 2019 D1 College Basketball seasons
+
+```{r}
+dim(cbb) 
+```
+This data has 2455 rows and 24 columns
+
+
+```{r}
+str(cbb)
+```
+```{r}
+head(cbb)
+```
+```{r}
+summary(cbb)
+```
+```{r}
+summary(cbb$YEAR)
+```
+Because COVID messed everything up after 2019, we will use data from 2013 to 2019
+
+```{r}
+summary(cbb$W) 
+```
+The average number of wins is 16.28, Max = 38
+
+```{r}
+boxplot(W~YEAR, data = cbb) 
+```
+Distribution of wins based on the season
+
+```{r}
+boxplot(G~YEAR, data = cbb) 
+```
+Same but for games. As you can see, there is a median of about 31 games per year
+
+
+## II. Data preprocessing {#II}
+
+### 1. Data Cleaning {#II.1}
+
+```{r}
+colSums(is.na(cbb))
+```
+The only N/A's are in POSTEASON and SEED. These are meaningful, however, since they indicate which teams made the tournament or not.
+
+
+```{r}
+# change n/a to "MISSED" the tourney
+cbb$POSTSEASON[is.na(cbb$POSTSEASON)]<-"MISSED"
+# change n/a in seed to a large number, like 100
+cbb$SEED[is.na(cbb$SEED)]<-100
+```
+
+
+
+### 2. Reducing Dimensionality/Variable Selection {#II.2}
+
+| Our Class Variable:
+| `POSTSEASON: Round where the given team was eliminated or where their season ended`
+
+| Other Variables:
+| `TEAM: The Division I college basketball school`  
+| `CONF: The Athletic Conference in which the school participates in`
+| `G: Number of games played`
+| `W: Number of games won`
+| `ADJOE: Adjusted Offensive Efficiency (An estimate of the offensive efficiency (points scored per 100 possessions)`
+|               `a team would have against the average Division I defense)`
+| `ADJDE: Adjusted Defensive Efficiency (An estimate of the defensive efficiency (points allowed per 100 possessions)`
+|               `a team would have against the average Division I offense)`
+| `BARTHAG: Power Rating (Chance of beating an average Division I team)`
+| `EFG_O: Effective Field Goal Percentage Shot`
+| `EFG_D: Effective Field Goal Percentage Allowed`
+| `TOR: Turnover Percentage Allowed (Turnover Rate)`
+| `TORD: Turnover Percentage Committed (Steal Rate)`
+| `ORB: Offensive Rebound Rate`
+| `DRB: Offensive Rebound Rate Allowed`
+| `FTR : Free Throw Rate (How often the given team shoots Free Throws)`
+| `FTRD: Free Throw Rate Allowed`
+| `2P_O: Two-Point Shooting Percentage`
+| `2P_D: Two-Point Shooting Percentage Allowed`
+| `3P_O: Three-Point Shooting Percentage`
+| `3P_D: Three-Point Shooting Percentage Allowed`
+| `ADJ_T: Adjusted Tempo (An estimate of the tempo (possessions per 40 minutes) a team would have against the team` 
+|               `that wants to play at an average Division I tempo)`
+| `WAB: Wins Above Bubble (The bubble refers to the cut off between making the NCAA March Madness Tournament and not making it)`
+| `SEED: Seed in the NCAA March Madness Tournament`
+| `YEAR: Season`
+
+
+<br>
+First, we should determine which variables outside of POSTSEASON are independent. 
+```{r fig.width=10}
+# remove class and string variables
+cbb_var = subset(cbb, select = -c(TEAM, CONF, POSTSEASON))
+
+# get correlations between each other 
+cbb_cor = cor(cbb_var)
+
+# plot
+corrplot(cbb_cor, method="circle")
+```
+
+Next, we should see which variables are correlated with the class variable. 
+```{r fig.width=10}
+# set texts to numbers
+cbb1 <- cbb
+cbb1$POSTSEASON[cbb1$POSTSEASON=="MISSED"]<--1
+cbb1$POSTSEASON[cbb1$POSTSEASON=="R68"]<-0
+cbb1$POSTSEASON[cbb1$POSTSEASON=="R64"]<-1
+cbb1$POSTSEASON[cbb1$POSTSEASON=="R32"]<-2
+cbb1$POSTSEASON[cbb1$POSTSEASON=="S16"]<-3
+cbb1$POSTSEASON[cbb1$POSTSEASON=="E8"]<-4
+cbb1$POSTSEASON[cbb1$POSTSEASON=="F4"]<-5
+cbb1$POSTSEASON[cbb1$POSTSEASON=="2ND"]<-6
+cbb1$POSTSEASON[cbb1$POSTSEASON=="Champions"]<-7
+
+# run linear regression and plot r^2
+m1<-regsubsets(POSTSEASON~.-TEAM-YEAR-CONF-G, data = cbb1)
+plot(m1,scale="adjr2", main="Variable Selection Based on adjr2")
+```
+
+| Conclusions:
+| - Wins, BARTHAG, and Wins above Bubble are highly correlated
+| - Offensive Effective FG is highly correlated with 3pt% and 2pt%
+| - Seed and Wins are negatively correlated
+| - No variable is highly correlated with the class variable, as expected of March Madness, which is known to be unpredictable
+
+<br>
+
+| Final Variables, based on independence, correlation with POSTSEASON, and general basketball knowledge:
+| 1. W
+| 2. ADJOE
+| 3. ADJDE
+| 4. EFG_O
+| 5. EFG_D
+| 6. DRB
+
+
+## III. Build and Test Classification Models {#III}
+
+Split into Train and Test datasets
+```{r}
+# convert class variable to factor
+cbb$POSTSEASON <- as.factor(cbb$POSTSEASON)
+
+# subset with needed variables
+cbb_mod <- subset(cbb, select=c(POSTSEASON, W, ADJOE, ADJDE, EFG_O, EFG_D, DRB))
+
+# randomly split data 70/30
+set.seed(123)
+ind <- sample(2, nrow(cbb_mod), replace=TRUE, prob=(c(0.7,0.3)))
+train_data <- cbb_mod[ind==1,]
+test_data <- cbb_mod[ind==2,]
+```
+
+
+### 1. Logistic Regression {#III.1}
+
+Build Model
+```{r}
+# build model
+cbb_glm <- multinom(POSTSEASON ~ ., data = train_data)
+
+# call model
+summary(cbb_glm)
+
+```
+
+Test Model
+```{r}
+# Make predictions
+pred_classes_glm <- cbb_glm %>% predict(test_data)
+# Model accuracy
+mean(pred_classes_glm == test_data$POSTSEASON)
+```
+
+
+### 2. SVM {#III.2}
+
+Build Model
+```{r}
+cbb_svm = svm(POSTSEASON ~ ., data = train_data, type="C-classification", kernal="radial", gamma=0.1, cost=10, scale = TRUE)
+
+summary(cbb_svm)
+```
+
+Test Model
+```{r}
+# Make predictions
+pred_classes_svm <- cbb_svm %>% predict(test_data)
+# Model accuracy
+mean(pred_classes_svm == test_data$POSTSEASON)
+
+```
+
+
+### 3. Decision Tree {#III.3}
+
+Build Model
+```{r}
+# build model
+cbb_tree <- ctree(POSTSEASON ~ ., data = train_data)
+
+# call model
+summary(cbb_tree)
+```
+
+Test Model
+```{r}
+# Make predictions
+pred_classes_tree <- cbb_tree %>% predict(test_data)
+# Model accuracy
+mean(pred_classes_tree == test_data$POSTSEASON)
+```
+
+
+### 4. KNN {#III.4}
+
+Build Model
+```{r}
+# normalize
+norm <-function(x) { (x -min(x))/(max(x)-min(x))}
+cbb_norm <- as.data.frame(lapply(subset(cbb_mod, select=-POSTSEASON), norm))
+
+# split data 70/30
+train_data_norm <- cbb_norm[ind==1,]
+test_data_norm <- cbb_norm[ind==2,]
+
+# extract classes
+class_train <- train_data$POSTSEASON
+class_test <- test_data$POSTSEASON
+
+# build model
+cbb_knn <- knn(train_data_norm, test_data_norm, class_train, k = 9)
+
+# call model
+summary(cbb_knn)
+```
+
+Test Model
+```{r}
+# create the confusion matrix
+tb <- table(cbb_knn,class_test)
+
+# check the accuracy
+accuracy <- function(x){sum(diag(x)/(sum(rowSums(x))))}
+accuracy(tb)
+```
+
+
+### 5. XGBoost {#III.5}
+
+Build Model
+```{r}
+# Create numeric labels with one-hot encoding
+train_labs <- as.numeric(train_data$POSTSEASON) - 1
+test_labs <- as.numeric(test_data$POSTSEASON) - 1
+
+new_train <- model.matrix(~ . + 0, data = train_data[, -1])
+new_test <- model.matrix(~ . + 0, data = test_data[, -1])
+
+# Prepare matrices
+xgb_train <- xgb.DMatrix(data = new_train, label = train_labs)
+xgb_test <- xgb.DMatrix(data = new_test, label = test_labs)
+
+# Set parameters(default)
+params <- list(booster = "gbtree", objective = "multi:softprob", num_class = 9, eval_metric = "mlogloss")
+
+# Calculate # of folds for cross-validation
+xgbcv <- xgb.cv(params = params, data = xgb_train, nrounds = 100, nfold = 5, showsd = TRUE, stratified = TRUE, print.every.n = 10, early_stop_round = 20, maximize = FALSE, prediction = TRUE)
+
+# Function to compute classification error
+classification_error <- function(conf_mat) {
+  conf_mat = as.matrix(conf_mat)
+  
+  error = 1 - sum(diag(conf_mat)) / sum(conf_mat)
+  
+  return (error)
+}
+
+# Mutate xgb output to deliver hard predictions
+xgb_train_preds <- data.frame(xgbcv$pred) %>% mutate(max = max.col(., ties.method = "last"), label = train_labs + 1)
+
+# Examine output
+head(xgb_train_preds)
+```
+
+Test Model
+```{r}
+# Confusion Matrix
+xgb_conf_mat <- table(true = train_labs + 1, pred = xgb_train_preds$max)
+
+# Model Accuracy
+accuracy(xgb_conf_mat)
+```
+
+
+## IV. Visualize and Analyze results {#IV}
+
+```{r}
+# plotting.comparing model results
+
+# analyze model accuracy
+
+# model selection
+
+```
+
