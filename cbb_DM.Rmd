@@ -52,11 +52,8 @@ library(caret)
 ## I. Data Exploration {#I}
 
 ```{r}
-# set directory
-setwd("~/Rutgers/8th Semester/Data Mining/Project/Project")
-
 # load data
-cbb <- read.csv("cbb.csv")
+cbb <- read.csv("https://raw.githubusercontent.com/mikul109/College-Basketball-Prediction/main/cbb.csv")
 setDT(cbb)
 ```
 Data from the 2013, 2014, 2015, 2016, 2017, 2018, and 2019 D1 College Basketball seasons
