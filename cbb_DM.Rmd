@@ -368,7 +368,4 @@ accuracy(xgb_conf_mat)
 
 
 
-```{r}
-print("noah and TJ stink")
-```
 
