@@ -67,12 +67,25 @@ This data has 2455 rows and 24 columns
 ```{r}
 str(cbb)
 ```
+This shows the type of data and a preview of the data in each column for the dataset. Most of the variables are numeric, but there are also integers and character data types.
+
+
 ```{r}
 head(cbb)
 ```
+The head function displays the first 6 rows of the data set.
+
 ```{r}
 summary(cbb)
 ```
+The summary function of used on the data set shows the minimum and maximum number of each column, as well as the 1st quartile, 3rd quartile, the mean and the median. 
+This function reveals some important information about our dataset.
+- Not every teams plays the same number of games like in many sports.
+- NOt every team in this data set is ranked (no Seed value). This means that they did not make it to the tournament
+
+
+
+
 ```{r}
 summary(cbb$YEAR)
 ```
@@ -86,7 +99,28 @@ The average number of wins is 16.28, Max = 38
 ```{r}
 boxplot(W~YEAR, data = cbb) 
 ```
-Distribution of wins based on the season
+Distribution of wins based on the season. These seem to be pretty consistent from year to year
+
+
+
+```{r}
+boxplot(W~SEED, data = cbb) 
+```
+This Boxplot shows the distribution of wins based on the seed value. Interestingly, the median number of wins does not always decrease with the seed number. For instance, the median wins for a 12th seed is higher than that for the 5th seed.
+
+This could be due to more games. I am going to create a variable called win percentage and analyze that to see if there are any differences.
+
+```{r}
+cbb1<- cbb
+cbb1$WPERC<-cbb1$W/cbb1$G
+
+boxplot(WPERC~SEED, data = cbb1) 
+```
+The same pattern continues. It seems to be even a little more exagerated with the 12th seed. Lets view the numbers used in this graph
+```{r}
+by(cbb1$WPERC,cbb1$SEED,summary)
+```
+
 
 ```{r}
 boxplot(G~YEAR, data = cbb) 
@@ -213,6 +247,12 @@ train_data <- cbb_mod[ind==1,]
 test_data <- cbb_mod[ind==2,]
 ```
 
+
+Before running models, I am going to create a baseline accuracy. Since this dataset is dominated by teams not making the tournament, the results from the models should be more than this percent:
+```{r}
+View(cbb)
+nrow(cbb[cbb$SEED==100])/nrow(cbb)
+```
 
 ### 1. Logistic Regression {#III.1}
 
@@ -367,5 +407,6 @@ accuracy(xgb_conf_mat)
 ```
 
 
-
+Get accuracy when you get all missed
+Get accuracy when you remove the missed class. may be much worse
 
