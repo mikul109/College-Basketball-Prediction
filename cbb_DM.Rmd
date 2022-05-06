@@ -16,7 +16,7 @@ Data from https://www.kaggle.com/datasets/andrewsundberg/college-basketball-data
 # Dependencies:
 library(tidyverse)
 library(data.table)
-library(plotly)
+library(classInt)
 library(corrplot)
 library(leaps)
 library(nnet)
@@ -31,13 +31,14 @@ library(caret)
 <br>
  
 | **Objective:**
-|   Use historical college basketball data to predict March Madness results
+|   Use historical college basketball data to predict Regular Season Wins
 
 | **Steps:**
 |     I. [Explore Dataset](#I)
 |     II. [Data Preprocessing](#II)
 |         1. [Cleaning](#II.1)
-|         2. [Reduce Dimensionality](#II.2)
+|         2. [Discretization](#II.2)
+|         3. [Reduce Dimensionality](#II.3)
 |     III. [Build and Test Classification Models](#III)
 |         1. [Logistic Regression](#III.1)
 |         2. [Support Vector Machine](#III.2)
@@ -135,22 +136,44 @@ Same but for games. As you can see, there is a median of about 31 games per year
 ```{r}
 colSums(is.na(cbb))
 ```
-The only N/A's are in POSTEASON and SEED. These are meaningful, however, since they indicate which teams made the tournament or not.
+The only N/A's are in POSTEASON and SEED. Since they only apply to a small percentage of teams that made the tournament, we should drop these columns from our model data
 
 
 ```{r}
-# change n/a to "MISSED" the tourney
-cbb$POSTSEASON[is.na(cbb$POSTSEASON)]<-"MISSED"
-# change n/a in seed to a large number, like 100
-cbb$SEED[is.na(cbb$SEED)]<-100
+# drop POSTSEASON and SEED
+cbb2 <- subset(cbb1, select=-c(POSTSEASON, SEED))
+```
+
+### 2. Discretization of the Class Variable {#II.2}
+
+```{r}
+# Our class variable is win percentage in the regular season, WPERC
+# We will use equal frequency binning with 4 bins
+nbins <- 4
+bins <- classIntervals(cbb2$WPERC, nbins, style = 'quantile')
+bins
+```
+```{r}
+# assign bins to the WPERC variable
+# assign variables as 1-4, representing the 4 bins
+cbb2$WPERC_b <- cut(cbb2$WPERC, breaks = bins$brks, labels=as.character(1:nbins))
+summary(cbb2$WPERC_b)
+```
+```{r}
+# drops rows that did not fit into bins
+cbb2<-cbb2[!(cbb2$WPERC_b=="NA"),]
+summary(cbb2$WPERC_b)
+
+# drop the WPERC variable that is not binned
+cbb2<-subset(cbb2, select=-c(WPERC))
 ```
 
 
 
-### 2. Reducing Dimensionality/Variable Selection {#II.2}
+### 3. Reducing Dimensionality/Variable Selection {#II.3}
 
 | Our Class Variable:
-| `POSTSEASON: Round where the given team was eliminated or where their season ended`
+| `WPERC_b: team's win percentage (number of games won divided by number games played), in 4 bins`
 
 | Other Variables:
 | `TEAM: The Division I college basketball school`  
@@ -177,18 +200,20 @@ cbb$SEED[is.na(cbb$SEED)]<-100
 | `ADJ_T: Adjusted Tempo (An estimate of the tempo (possessions per 40 minutes) a team would have against the team` 
 |               `that wants to play at an average Division I tempo)`
 | `WAB: Wins Above Bubble (The bubble refers to the cut off between making the NCAA March Madness Tournament and not making it)`
-| `SEED: Seed in the NCAA March Madness Tournament`
 | `YEAR: Season`
 
 
 <br>
-First, we should determine which variables outside of POSTSEASON are independent. 
+First, we should determine which variables outside of WPERC are independent. 
 ```{r fig.width=10}
 # remove class and string variables
-cbb_var = subset(cbb, select = -c(TEAM, CONF, POSTSEASON))
+cbb_var <- subset(cbb2, select = -c(TEAM, CONF, WPERC_b))
+
+# remove obvious dependent variables
+cbb_var1 <- subset(cbb_var, select = -c(W, G, WAB, BARTHAG))
 
 # get correlations between each other 
-cbb_cor = cor(cbb_var)
+cbb_cor <- cor(cbb_var1)
 
 # plot
 corrplot(cbb_cor, method="circle")
@@ -196,38 +221,23 @@ corrplot(cbb_cor, method="circle")
 
 Next, we should see which variables are correlated with the class variable. 
 ```{r fig.width=10}
-# set texts to numbers
-cbb1 <- cbb
-cbb1$POSTSEASON[cbb1$POSTSEASON=="MISSED"]<--1
-cbb1$POSTSEASON[cbb1$POSTSEASON=="R68"]<-0
-cbb1$POSTSEASON[cbb1$POSTSEASON=="R64"]<-1
-cbb1$POSTSEASON[cbb1$POSTSEASON=="R32"]<-2
-cbb1$POSTSEASON[cbb1$POSTSEASON=="S16"]<-3
-cbb1$POSTSEASON[cbb1$POSTSEASON=="E8"]<-4
-cbb1$POSTSEASON[cbb1$POSTSEASON=="F4"]<-5
-cbb1$POSTSEASON[cbb1$POSTSEASON=="2ND"]<-6
-cbb1$POSTSEASON[cbb1$POSTSEASON=="Champions"]<-7
-
 # run linear regression and plot r^2
-m1<-regsubsets(POSTSEASON~.-TEAM-YEAR-CONF-G, data = cbb1)
+m1<-regsubsets(WPERC_b~.-TEAM-YEAR-CONF-G-W-WAB-BARTHAG, data = cbb2)
 plot(m1,scale="adjr2", main="Variable Selection Based on adjr2")
 ```
 
 | Conclusions:
-| - Wins, BARTHAG, and Wins above Bubble are highly correlated
-| - Offensive Effective FG is highly correlated with 3pt% and 2pt%
-| - Seed and Wins are negatively correlated
-| - No variable is highly correlated with the class variable, as expected of March Madness, which is known to be unpredictable
+| - idk
+
 
 <br>
 
-| Final Variables, based on independence, correlation with POSTSEASON, and general basketball knowledge:
-| 1. W
-| 2. ADJOE
-| 3. ADJDE
-| 4. EFG_O
-| 5. EFG_D
-| 6. DRB
+| Final Variables, based on independence, correlation with WPERC, and general basketball knowledge:
+| 1. EFG_O
+| 2. EFG_D
+| 3. TOR
+| 4. TORD
+| 5. ORB
 
 
 ## III. Build and Test Classification Models {#III}
@@ -235,10 +245,10 @@ plot(m1,scale="adjr2", main="Variable Selection Based on adjr2")
 Split into Train and Test datasets
 ```{r}
 # convert class variable to factor
-cbb$POSTSEASON <- as.factor(cbb$POSTSEASON)
+cbb2$WPERC_b <- as.factor(cbb2$WPERC_b)
 
 # subset with needed variables
-cbb_mod <- subset(cbb, select=c(POSTSEASON, W, ADJOE, ADJDE, EFG_O, EFG_D, DRB))
+cbb_mod <- subset(cbb2, select=c(WPERC_b, EFG_O, EFG_D, TOR, TORD, ORB))
 
 # randomly split data 70/30
 set.seed(123)
@@ -250,6 +260,7 @@ test_data <- cbb_mod[ind==2,]
 
 Before running models, I am going to create a baseline accuracy. Since this dataset is dominated by teams not making the tournament, the results from the models should be more than this percent:
 ```{r}
+###### not needed?
 View(cbb)
 nrow(cbb[cbb$SEED==100])/nrow(cbb)
 ```
@@ -259,7 +270,7 @@ nrow(cbb[cbb$SEED==100])/nrow(cbb)
 Build Model
 ```{r}
 # build model
-cbb_glm <- multinom(POSTSEASON ~ ., data = train_data)
+cbb_glm <- multinom(WPERC_b ~ ., data = train_data)
 
 # call model
 summary(cbb_glm)
@@ -271,7 +282,7 @@ Test Model
 # Make predictions
 pred_classes_glm <- cbb_glm %>% predict(test_data)
 # Model accuracy
-mean(pred_classes_glm == test_data$POSTSEASON)
+mean(pred_classes_glm == test_data$WPERC_b)
 ```
 
 
@@ -279,7 +290,7 @@ mean(pred_classes_glm == test_data$POSTSEASON)
 
 Build Model
 ```{r}
-cbb_svm = svm(POSTSEASON ~ ., data = train_data, type="C-classification", kernal="radial", gamma=0.1, cost=10, scale = TRUE)
+cbb_svm = svm(WPERC_b ~ ., data = train_data, type="C-classification", kernal="radial", gamma=0.1, cost=10, scale = TRUE)
 
 summary(cbb_svm)
 ```
@@ -289,7 +300,7 @@ Test Model
 # Make predictions
 pred_classes_svm <- cbb_svm %>% predict(test_data)
 # Model accuracy
-mean(pred_classes_svm == test_data$POSTSEASON)
+mean(pred_classes_svm == test_data$WPERC_b)
 
 ```
 
@@ -299,7 +310,7 @@ mean(pred_classes_svm == test_data$POSTSEASON)
 Build Model
 ```{r}
 # build model
-cbb_tree <- ctree(POSTSEASON ~ ., data = train_data)
+cbb_tree <- ctree(WPERC_b ~ ., data = train_data)
 
 # call model
 summary(cbb_tree)
@@ -310,7 +321,7 @@ Test Model
 # Make predictions
 pred_classes_tree <- cbb_tree %>% predict(test_data)
 # Model accuracy
-mean(pred_classes_tree == test_data$POSTSEASON)
+mean(pred_classes_tree == test_data$WPERC_b)
 ```
 
 
@@ -320,18 +331,18 @@ Build Model
 ```{r}
 # normalize
 norm <-function(x) { (x -min(x))/(max(x)-min(x))}
-cbb_norm <- as.data.frame(lapply(subset(cbb_mod, select=-POSTSEASON), norm))
+cbb_norm <- as.data.frame(lapply(subset(cbb_mod, select=-WPERC_b), norm))
 
 # split data 70/30
 train_data_norm <- cbb_norm[ind==1,]
 test_data_norm <- cbb_norm[ind==2,]
 
 # extract classes
-class_train <- train_data$POSTSEASON
-class_test <- test_data$POSTSEASON
+class_train <- train_data$WPERC_b
+class_test <- test_data$WPERC_b
 
 # build model
-cbb_knn <- knn(train_data_norm, test_data_norm, class_train, k = 9)
+cbb_knn <- knn(train_data_norm, test_data_norm, class_train, k = nbins)
 
 # call model
 summary(cbb_knn)
@@ -353,8 +364,8 @@ accuracy(tb)
 Build Model
 ```{r}
 # Create numeric labels with one-hot encoding
-train_labs <- as.numeric(train_data$POSTSEASON) - 1
-test_labs <- as.numeric(test_data$POSTSEASON) - 1
+train_labs <- as.numeric(train_data$WPERC_b) - 1
+test_labs <- as.numeric(test_data$WPERC_b) - 1
 
 new_train <- model.matrix(~ . + 0, data = train_data[, -1])
 new_test <- model.matrix(~ . + 0, data = test_data[, -1])
@@ -364,7 +375,7 @@ xgb_train <- xgb.DMatrix(data = new_train, label = train_labs)
 xgb_test <- xgb.DMatrix(data = new_test, label = test_labs)
 
 # Set parameters(default)
-params <- list(booster = "gbtree", objective = "multi:softprob", num_class = 9, eval_metric = "mlogloss")
+params <- list(booster = "gbtree", objective = "multi:softprob", num_class = nbins, eval_metric = "mlogloss")
 
 # Calculate # of folds for cross-validation
 xgbcv <- xgb.cv(params = params, data = xgb_train, nrounds = 100, nfold = 5, showsd = TRUE, stratified = TRUE, print.every.n = 10, early_stop_round = 20, maximize = FALSE, prediction = TRUE)
