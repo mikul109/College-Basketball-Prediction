@@ -19,6 +19,7 @@ library(data.table)
 library(classInt)
 library(corrplot)
 library(leaps)
+library(pROC)
 library(nnet)
 library(e1071)
 library(partykit)
@@ -38,19 +39,19 @@ library(caret)
 |     II. [Data Preprocessing](#II)
 |         1. [Cleaning](#II.1)
 |         2. [Discretization](#II.2)
-|         3. [Reduce Dimensionality](#II.3)
+|         3. [Reducing Dimensionality](#II.3)
 |     III. [Build and Test Classification Models](#III)
 |         1. [Logistic Regression](#III.1)
 |         2. [Support Vector Machine](#III.2)
 |         3. [Decision Tree](#III.3)
 |         4. [K-Nearest-Neighbors](#III.4)
 |         5. [XGBoost](#III.5)
-|     IV. [Visualize and Analyze results](#IV)
+|     IV. [Model Selection](#IV)
 
 <br>
 
 
-## I. Data Exploration {#I}
+## **I. Data Exploration** {#I}
 
 ```{r}
 # load data
@@ -62,115 +63,9 @@ Data from the 2013, 2014, 2015, 2016, 2017, 2018, and 2019 D1 College Basketball
 ```{r}
 dim(cbb) 
 ```
-This data has 2455 rows and 24 columns
+This data has 2455 rows and 24 columns.
 
-
-```{r}
-str(cbb)
-```
-This shows the type of data and a preview of the data in each column for the dataset. Most of the variables are numeric, but there are also integers and character data types.
-
-
-```{r}
-head(cbb)
-```
-The head function displays the first 6 rows of the data set.
-
-```{r}
-summary(cbb)
-```
-The summary function of used on the data set shows the minimum and maximum number of each column, as well as the 1st quartile, 3rd quartile, the mean and the median. 
-This function reveals some important information about our dataset.
-- Not every teams plays the same number of games like in many sports.
-- NOt every team in this data set is ranked (no Seed value). This means that they did not make it to the tournament
-
-
-
-
-```{r}
-summary(cbb$YEAR)
-```
-Because COVID messed everything up after 2019, we will use data from 2013 to 2019
-
-```{r}
-summary(cbb$W) 
-```
-The average number of wins is 16.28, Max = 38
-
-```{r}
-boxplot(W~YEAR, data = cbb) 
-```
-Distribution of wins based on the season. These seem to be pretty consistent from year to year
-
-
-
-```{r}
-boxplot(W~SEED, data = cbb) 
-```
-This Boxplot shows the distribution of wins based on the seed value. Interestingly, the median number of wins does not always decrease with the seed number. For instance, the median wins for a 12th seed is higher than that for the 5th seed.
-
-This could be due to more games. I am going to create a variable called win percentage and analyze that to see if there are any differences.
-
-```{r}
-cbb1<- cbb
-cbb1$WPERC<-cbb1$W/cbb1$G
-
-boxplot(WPERC~SEED, data = cbb1) 
-```
-The same pattern continues. It seems to be even a little more exagerated with the 12th seed. Lets view the numbers used in this graph
-```{r}
-by(cbb1$WPERC,cbb1$SEED,summary)
-```
-
-
-```{r}
-boxplot(G~YEAR, data = cbb) 
-```
-Same but for games. As you can see, there is a median of about 31 games per year
-
-
-## II. Data preprocessing {#II}
-
-### 1. Data Cleaning {#II.1}
-
-```{r}
-colSums(is.na(cbb))
-```
-The only N/A's are in POSTEASON and SEED. Since they only apply to a small percentage of teams that made the tournament, we should drop these columns from our model data
-
-
-```{r}
-# drop POSTSEASON and SEED
-cbb2 <- subset(cbb1, select=-c(POSTSEASON, SEED))
-```
-
-### 2. Discretization of the Class Variable {#II.2}
-
-```{r}
-# Our class variable is win percentage in the regular season, WPERC
-# We will use equal frequency binning with 4 bins
-nbins <- 4
-bins <- classIntervals(cbb2$WPERC, nbins, style = 'quantile')
-bins
-```
-```{r}
-# assign bins to the WPERC variable
-# assign variables as 1-4, representing the 4 bins
-cbb2$WPERC_b <- cut(cbb2$WPERC, breaks = bins$brks, labels=as.character(1:nbins))
-summary(cbb2$WPERC_b)
-```
-```{r}
-# drops rows that did not fit into bins
-cbb2<-cbb2[!(cbb2$WPERC_b=="NA"),]
-summary(cbb2$WPERC_b)
-
-# drop the WPERC variable that is not binned
-cbb2<-subset(cbb2, select=-c(WPERC))
-```
-
-
-
-### 3. Reducing Dimensionality/Variable Selection {#II.3}
+<br>
 
 | Our Class Variable:
 | `WPERC_b: team's win percentage (number of games won divided by number games played), in 4 bins`
@@ -204,13 +99,163 @@ cbb2<-subset(cbb2, select=-c(WPERC))
 
 
 <br>
-First, we should determine which variables outside of WPERC are independent. 
+
+```{r}
+str(cbb)
+```
+This shows the type of data and a preview of the data in each column for the dataset. Most of the variables are numeric, but there are also integers and character data types.
+
+
+```{r}
+head(cbb)
+```
+The head function displays the first 6 rows of the data set.
+
+```{r}
+summary(cbb)
+```
+| The summary function of used on the data set shows the minimum and maximum number of each column, as well as the 1st quartile, 3rd quartile, the mean and the median. 
+| This function reveals some important information about our dataset.
+| - Not every teams plays the same number of games like in many sports.
+| - Not every team in this data set is ranked (no Seed value). This means that they did not make it to the tournament
+
+```{r}
+summary(cbb$YEAR)
+```
+Because COVID messed everything up after 2019, we will use data from 2013 to 2019
+
+```{r}
+summary(cbb$W) 
+```
+The average number of wins is 16.28, Max = 38
+
+```{r}
+boxplot(W~YEAR, data = cbb) 
+```
+Distribution of wins based on the season. These seem to be pretty consistent from year to year
+
+
+
+```{r}
+boxplot(W~SEED, data = cbb) 
+```
+This Boxplot shows the distribution of wins based on the seed value. Interestingly, the median number of wins does not always decrease with the seed number. For instance, the median wins for a 12th seed is higher than that for the 5th seed.
+
+This could be due to more games. I am going to create a variable called win percentage and analyze that to see if there are any differences.
+
+```{r}
+cbb1<- cbb
+cbb1$WPERC<-cbb1$W/cbb1$G
+
+boxplot(WPERC~SEED, data = cbb1) 
+```
+The same pattern continues. It seems to be even a little more exaggerated with the 12th seed. Lets view the numbers used in this graph
+```{r}
+by(cbb1$WPERC,cbb1$SEED,summary)
+```
+
+
+```{r}
+boxplot(G~YEAR, data = cbb) 
+```
+Same but for games. As you can see, there is a median of about 31 games per year
+
+Win Percentage Per Conference:
+```{r}
+ggplot(cbb1, aes(x=CONF, y=WPERC)) + 
+  geom_boxplot() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+
+## Scatter Plots {.tabset}
+
+### 1
+```{r}
+ggplot(cbb) +
+  geom_point(aes(EFG_D, W), colour = 'blue')
+```
+
+### 2
+```{r}
+ggplot(cbb) +
+  geom_point(aes(ADJDE, W), colour = 'red')
+```
+
+### 3
+```{r}
+ggplot(cbb) +
+  geom_point(aes(ADJOE, W), colour = 'purple')
+```
+
+### 4
+```{r}
+ggplot(cbb) +
+  geom_point(aes(EFG_D, W), colour = 'cyan')
+```
+
+### 5
+```{r}
+ggplot(cbb) +
+  geom_point(aes(TORD, EFG_D), colour = 'green')
+```
+
+### 6
+```{r}
+ggplot(cbb) +
+  geom_point(aes(YEAR, X3P_O), colour = 'orange')
+```
+## {-}
+
+## **II. Data preprocessing** {#II}
+
+## 1. Data Cleaning {#II.1}
+
+```{r}
+colSums(is.na(cbb))
+```
+The only N/A's are in POSTEASON and SEED. Since they only apply to a small percentage of teams that made the tournament, we should drop these columns from our model data
+
+
+```{r}
+# drop POSTSEASON and SEED
+cbb2 <- subset(cbb1, select=-c(POSTSEASON, SEED))
+```
+
+## 2. Discretization of the Class Variable {#II.2}
+
+```{r}
+# Our class variable is win percentage in the regular season, WPERC
+# We will use equal frequency binning with 4 bins
+nbins <- 4
+bins <- classIntervals(cbb2$WPERC, nbins, style = 'quantile')
+bins
+```
+```{r}
+# assign bins to the WPERC variable
+# assign variables as 1-4, representing the 4 bins
+cbb2$WPERC_b <- cut(cbb2$WPERC, breaks = bins$brks, labels=as.character(1:nbins))
+summary(cbb2$WPERC_b)
+```
+```{r}
+# drops rows that did not fit into bins
+cbb2<-cbb2[!(cbb2$WPERC_b=="NA"),]
+summary(cbb2$WPERC_b)
+
+# drop the WPERC variable that is not binned
+cbb2<-subset(cbb2, select=-c(WPERC))
+```
+
+
+
+## 3. Reducing Dimensionality/Variable Selection {#II.3}
+
+First, we should determine which variables outside of WPERC_b are independent. 
 ```{r fig.width=10}
 # remove class and string variables
 cbb_var <- subset(cbb2, select = -c(TEAM, CONF, WPERC_b))
 
 # remove obvious dependent variables
-cbb_var1 <- subset(cbb_var, select = -c(W, G, WAB, BARTHAG))
+cbb_var1 <- subset(cbb_var, select = -c(W, G, WAB))
 
 # get correlations between each other 
 cbb_cor <- cor(cbb_var1)
@@ -222,25 +267,30 @@ corrplot(cbb_cor, method="circle")
 Next, we should see which variables are correlated with the class variable. 
 ```{r fig.width=10}
 # run linear regression and plot r^2
-m1<-regsubsets(WPERC_b~.-TEAM-YEAR-CONF-G-W-WAB-BARTHAG, data = cbb2)
+m1<-regsubsets(WPERC_b~.-TEAM-YEAR-CONF-G-W-WAB, data = cbb2)
 plot(m1,scale="adjr2", main="Variable Selection Based on adjr2")
 ```
 
 | Conclusions:
-| - idk
+| - Offensive stats such as ADJOE, 2P_O, and 3P_O are highly correlated with each other
+| - Defensive stats such as ADJDE, EFG_D, 2P_D, and 3P_D are highly correlated with each other
+| - BARTHAG is the variable most correlated with the class variable, WPERC_b
+| - BARTHAG is most correlated with ADJOE and ADJDE
 
 
 <br>
 
-| Final Variables, based on independence, correlation with WPERC, and general basketball knowledge:
-| 1. EFG_O
-| 2. EFG_D
-| 3. TOR
+| Final Variables, based on independence, correlation with WPERC_b, and general basketball knowledge:
+| 1. BARTHAG
+| 2. EFG_O
+| 3. EFG_D
 | 4. TORD
-| 5. ORB
+| 5. DRB
+| 6. ADJOE
+| 7. ADJDE
 
 
-## III. Build and Test Classification Models {#III}
+## **III. Build and Test Classification Models** {#III}
 
 Split into Train and Test datasets
 ```{r}
@@ -248,7 +298,7 @@ Split into Train and Test datasets
 cbb2$WPERC_b <- as.factor(cbb2$WPERC_b)
 
 # subset with needed variables
-cbb_mod <- subset(cbb2, select=c(WPERC_b, EFG_O, EFG_D, TOR, TORD, ORB))
+cbb_mod <- subset(cbb2, select=c(WPERC_b, BARTHAG, EFG_O, EFG_D, TORD, DRB, ADJOE, ADJDE))
 
 # randomly split data 70/30
 set.seed(123)
@@ -258,86 +308,115 @@ test_data <- cbb_mod[ind==2,]
 ```
 
 
-Before running models, I am going to create a baseline accuracy. Since this dataset is dominated by teams not making the tournament, the results from the models should be more than this percent:
-```{r}
-###### not needed?
-nrow(cbb[cbb$SEED==100])/nrow(cbb)
-```
 
-### 1. Logistic Regression {#III.1}
+## 1. Logistic Regression {#III.1} 
+## {.tabset}
 
-Build Model
+### Build Model
 ```{r}
 # build model
 cbb_glm <- multinom(WPERC_b ~ ., data = train_data)
 
 # call model
 summary(cbb_glm)
+```
+### Plot Model
+```{r fig.width=10}
 
 ```
 
-Test Model
+### Test Model
 ```{r}
 # Make predictions
 pred_classes_glm <- cbb_glm %>% predict(test_data)
 # Model accuracy
 mean(pred_classes_glm == test_data$WPERC_b)
+
+# Confusion matrix and stats
+confusionMatrix(pred_classes_glm, test_data$WPERC_b)
 ```
+
+```{r, results='hide', warning=FALSE, fig.width=10}
+# define object to plot and calculate AUC
+predicted_glm <- factor(pred_classes_glm, ordered = TRUE)
+rocobj <- roc(test_data$WPERC_b, predicted_glm)
+auc <- round(auc(test_data$WPERC_b, predicted_glm),4)
+
+# create ROC plot
+ggroc(rocobj, colour = 'steelblue', size = 2) +
+  ggtitle(paste0('ROC Curve ', '(AUC = ', auc, ')'))
+```
+## {-}
+
 ```{r}
 
-cbb1<-cbb
+#cbb3<-cbb
 # All teams that missed the playoffs are given a value of 0
-cbb1$SEED[cbb1$SEED==100]<-0
+#cbb3$SEED[cbb3$SEED==100]<-0
 # All teams that made the playoffs are given a value of 1
-cbb1$SEED[cbb1$SEED>0]<-1
-View(cbb1)
+#cbb3$SEED[cbb3$SEED>0]<-1
+#View(cbb3)
 # subset with needed variables
-cbb1_mod <- subset(cbb1, select=c(SEED, W, ADJOE, ADJDE, EFG_O, EFG_D, DRB))
+#cbb3_mod <- subset(cbb3, select=c(SEED, W, ADJOE, ADJDE, EFG_O, EFG_D, DRB))
 
 # randomly split data 70/30
-set.seed(123)
-ind <- sample(2, nrow(cbb1_mod), replace=TRUE, prob=(c(0.7,0.3)))
-train_data_cbb1 <- cbb1_mod[ind==1,]
-test_data_cbb1 <- cbb1_mod[ind==2,]
+#set.seed(123)
+#ind <- sample(2, nrow(cbb3_mod), replace=TRUE, prob=(c(0.7,0.3)))
+#train_data_cbb3 <- cbb3_mod[ind==1,]
+#test_data_cbb3 <- cbb3_mod[ind==2,]
 
 
-cbblmBinary<-glm(SEED~W, data =train_data_cbb1, family="binomial")
-summary(cbblmBinary)
+#cbblmBinary<-glm(SEED~W, data =train_data_cbb3, family="binomial")
+#summary(cbblmBinary)
 # Make predictions
-pred_classes_lmBin <- cbblmBinary %>% predict(test_data_cbb1)
+#pred_classes_lmBin <- cbblmBinary %>% predict(test_data_cbb3)
 # Model accuracy
-pred_
+#pred_
 ```
 
 
-### 2. SVM {#III.2}
+## 2. SVM {#III.2}
+## {.tabset}
 
-Build Model
+### Build Model
 ```{r}
 cbb_svm = svm(WPERC_b ~ ., data = train_data, type="C-classification", kernal="radial", gamma=0.1, cost=10, scale = TRUE)
 
 summary(cbb_svm)
 ```
 
-Test Model
+### Plot Model
+```{r fig.width=10}
+plot(cbb_svm, train_data, EFG_D~BARTHAG)
+```
+
+### Test Model
 ```{r}
 # Make predictions
 pred_classes_svm <- cbb_svm %>% predict(test_data)
 # Model accuracy
 mean(pred_classes_svm == test_data$WPERC_b)
 
+# Confusion matrix and stats
+confusionMatrix(pred_classes_svm, test_data$WPERC_b)
 ```
 
-```{r}
-plot(cbb_svm, train_data, EFG_O~TOR)
-plot(W~ADJOE,data=cbb)
+```{r, results='hide', warning=FALSE, fig.width=10}
+# define object to plot and calculate AUC
+predicted_svm <- factor(pred_classes_svm, ordered = TRUE)
+rocobj <- roc(test_data$WPERC_b, predicted_svm)
+auc <- round(auc(test_data$WPERC_b, predicted_svm),4)
+
+# create ROC plot
+ggroc(rocobj, colour = 'steelblue', size = 2) +
+  ggtitle(paste0('ROC Curve ', '(AUC = ', auc, ')'))
 ```
+## {-}
 
+## 3. Decision Tree {#III.3}
+## {.tabset}
 
-
-### 3. Decision Tree {#III.3}
-
-Build Model
+### Build Model
 ```{r}
 # build model
 cbb_tree <- ctree(WPERC_b ~ ., data = train_data)
@@ -346,24 +425,40 @@ cbb_tree <- ctree(WPERC_b ~ ., data = train_data)
 summary(cbb_tree)
 ```
 
-
-```{r}
+### Plot Model
+```{r fig.width=10}
 plot(cbb_tree)
 ```
 
 
-Test Model
+### Test Model
 ```{r}
 # Make predictions
 pred_classes_tree <- cbb_tree %>% predict(test_data)
 # Model accuracy
 mean(pred_classes_tree == test_data$WPERC_b)
+
+# Confusion matrix and stats
+confusionMatrix(pred_classes_tree, test_data$WPERC_b)
 ```
 
+```{r, results='hide', warning=FALSE, fig.width=10}
+# define object to plot and calculate AUC
+predicted_tree <- factor(pred_classes_tree, ordered = TRUE)
+rocobj <- roc(test_data$WPERC_b, predicted_tree)
+auc <- round(auc(test_data$WPERC_b, predicted_tree),4)
 
-### 4. KNN {#III.4}
+# create ROC plot
+ggroc(rocobj, colour = 'steelblue', size = 2) +
+  ggtitle(paste0('ROC Curve ', '(AUC = ', auc, ')'))
+```
+## {-}
 
-Build Model
+
+## 4. KNN {#III.4}
+## {.tabset}
+
+### Build Model
 ```{r}
 # normalize
 norm <-function(x) { (x -min(x))/(max(x)-min(x))}
@@ -383,8 +478,12 @@ cbb_knn <- knn(train_data_norm, test_data_norm, class_train, k = nbins)
 # call model
 summary(cbb_knn)
 ```
+### Plot Model
+```{r fig.width=10}
 
-Test Model
+```
+
+### Test Model
 ```{r}
 # create the confusion matrix
 tb <- table(cbb_knn,class_test)
@@ -392,12 +491,28 @@ tb <- table(cbb_knn,class_test)
 # check the accuracy
 accuracy <- function(x){sum(diag(x)/(sum(rowSums(x))))}
 accuracy(tb)
+
+# Confusion matrix and stats
+confusionMatrix(cbb_knn, test_data$WPERC_b)
 ```
 
+```{r, results='hide', warning=FALSE, fig.width=10}
+# define object to plot and calculate AUC
+predicted_knn <- factor(cbb_knn, ordered = TRUE)
+rocobj <- roc(test_data$WPERC_b, predicted_knn)
+auc <- round(auc(test_data$WPERC_b, predicted_knn),4)
 
-### 5. XGBoost {#III.5}
+# create ROC plot
+ggroc(rocobj, colour = 'steelblue', size = 2) +
+  ggtitle(paste0('ROC Curve ', '(AUC = ', auc, ')'))
+```
+## {-}
 
-Build Model
+
+## 5. XGBoost {#III.5}
+## {.tabset}
+
+### Build Model
 ```{r}
 # Create numeric labels with one-hot encoding
 train_labs <- as.numeric(train_data$WPERC_b) - 1
@@ -419,9 +534,7 @@ xgbcv <- xgb.cv(params = params, data = xgb_train, nrounds = 100, nfold = 5, sho
 # Function to compute classification error
 classification_error <- function(conf_mat) {
   conf_mat = as.matrix(conf_mat)
-  
   error = 1 - sum(diag(conf_mat)) / sum(conf_mat)
-  
   return (error)
 }
 
@@ -432,17 +545,36 @@ xgb_train_preds <- data.frame(xgbcv$pred) %>% mutate(max = max.col(., ties.metho
 head(xgb_train_preds)
 ```
 
-Test Model
+### Plot Model
+```{r fig.width=10}
+
+```
+
+
+### Test Model
 ```{r}
 # Confusion Matrix
 xgb_conf_mat <- table(true = train_labs + 1, pred = xgb_train_preds$max)
 
 # Model Accuracy
 accuracy(xgb_conf_mat)
+
+# Confusion matrix and stats
+confusionMatrix(factor(xgb_train_preds$max), factor(train_labs + 1))
 ```
+```{r, results='hide', warning=FALSE, fig.width=10}
+# define object to plot and calculate AUC
+predicted_xgb <- factor(xgb_train_preds$max, ordered = TRUE)
+rocobj <- roc(factor(train_labs + 1), predicted_xgb)
+auc <- round(auc(factor(train_labs + 1), predicted_xgb),4)
 
+# create ROC plot
+ggroc(rocobj, colour = 'steelblue', size = 2) +
+  ggtitle(paste0('ROC Curve ', '(AUC = ', auc, ')'))
+```
+## {-}
 
-## IV. Visualize and Analyze results {#IV}
+## **IV. Model Selection** {#IV}
 
 ```{r}
 # plotting.comparing model results
@@ -453,7 +585,4 @@ accuracy(xgb_conf_mat)
 
 ```
 
-
-Get accuracy when you get all missed
-Get accuracy when you remove the missed class. may be much worse
 
