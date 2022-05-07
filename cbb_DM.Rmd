@@ -42,11 +42,14 @@ library(caret)
 |         3. [Reducing Dimensionality](#II.3)
 |     III. [Build and Test Classification Models](#III)
 |         1. [Logistic Regression](#III.1)
-|         2. [Support Vector Machine](#III.2)
+|         2. [Support Vector Machines](#III.2)
 |         3. [Decision Tree](#III.3)
-|         4. [K-Nearest-Neighbors](#III.4)
+|         4. [K-Nearest Neighbors](#III.4)
 |         5. [XGBoost](#III.5)
 |     IV. [Model Selection](#IV)
+|         1. [Comparing Accuracy](#IV.1)
+|         2. [Comparing AUC](#IV.2)
+|         3. [Conclusion](#IV.3)
 
 <br>
 
@@ -335,16 +338,16 @@ mean(pred_classes_glm == test_data$WPERC_b)
 # Confusion matrix and stats
 confusionMatrix(pred_classes_glm, test_data$WPERC_b)
 ```
-
+### ROC Curve
 ```{r, results='hide', warning=FALSE, fig.width=10}
 # define object to plot and calculate AUC
 predicted_glm <- factor(pred_classes_glm, ordered = TRUE)
-rocobj <- roc(test_data$WPERC_b, predicted_glm)
-auc <- round(auc(test_data$WPERC_b, predicted_glm),4)
+rocobj_glm <- roc(test_data$WPERC_b, predicted_glm)
+auc_glm <- round(auc(test_data$WPERC_b, predicted_glm),4)
 
 # create ROC plot
-ggroc(rocobj, colour = 'steelblue', size = 2) +
-  ggtitle(paste0('ROC Curve ', '(AUC = ', auc, ')'))
+ggroc(rocobj_glm, colour = 'steelblue', size = 2) +
+  ggtitle(paste0('ROC Curve ', '(AUC = ', auc_glm, ')'))
 ```
 ## {-}
 
@@ -401,15 +404,16 @@ mean(pred_classes_svm == test_data$WPERC_b)
 confusionMatrix(pred_classes_svm, test_data$WPERC_b)
 ```
 
+### ROC Curve
 ```{r, results='hide', warning=FALSE, fig.width=10}
 # define object to plot and calculate AUC
 predicted_svm <- factor(pred_classes_svm, ordered = TRUE)
-rocobj <- roc(test_data$WPERC_b, predicted_svm)
-auc <- round(auc(test_data$WPERC_b, predicted_svm),4)
+rocobj_svm <- roc(test_data$WPERC_b, predicted_svm)
+auc_svm <- round(auc(test_data$WPERC_b, predicted_svm),4)
 
 # create ROC plot
-ggroc(rocobj, colour = 'steelblue', size = 2) +
-  ggtitle(paste0('ROC Curve ', '(AUC = ', auc, ')'))
+ggroc(rocobj_svm, colour = 'steelblue', size = 2) +
+  ggtitle(paste0('ROC Curve ', '(AUC = ', auc_svm, ')'))
 ```
 ## {-}
 
@@ -441,16 +445,16 @@ mean(pred_classes_tree == test_data$WPERC_b)
 # Confusion matrix and stats
 confusionMatrix(pred_classes_tree, test_data$WPERC_b)
 ```
-
+### ROC Curve
 ```{r, results='hide', warning=FALSE, fig.width=10}
 # define object to plot and calculate AUC
 predicted_tree <- factor(pred_classes_tree, ordered = TRUE)
-rocobj <- roc(test_data$WPERC_b, predicted_tree)
-auc <- round(auc(test_data$WPERC_b, predicted_tree),4)
+rocobj_tree <- roc(test_data$WPERC_b, predicted_tree)
+auc_tree <- round(auc(test_data$WPERC_b, predicted_tree),4)
 
 # create ROC plot
-ggroc(rocobj, colour = 'steelblue', size = 2) +
-  ggtitle(paste0('ROC Curve ', '(AUC = ', auc, ')'))
+ggroc(rocobj_tree, colour = 'steelblue', size = 2) +
+  ggtitle(paste0('ROC Curve ', '(AUC = ', auc_tree, ')'))
 ```
 ## {-}
 
@@ -486,25 +490,25 @@ summary(cbb_knn)
 ### Test Model
 ```{r}
 # create the confusion matrix
-tb <- table(cbb_knn,class_test)
+tb_knn <- table(cbb_knn,class_test)
 
 # check the accuracy
 accuracy <- function(x){sum(diag(x)/(sum(rowSums(x))))}
-accuracy(tb)
+accuracy(tb_knn)
 
 # Confusion matrix and stats
 confusionMatrix(cbb_knn, test_data$WPERC_b)
 ```
-
+### ROC Curve
 ```{r, results='hide', warning=FALSE, fig.width=10}
 # define object to plot and calculate AUC
 predicted_knn <- factor(cbb_knn, ordered = TRUE)
-rocobj <- roc(test_data$WPERC_b, predicted_knn)
-auc <- round(auc(test_data$WPERC_b, predicted_knn),4)
+rocobj_knn <- roc(test_data$WPERC_b, predicted_knn)
+auc_knn <- round(auc(test_data$WPERC_b, predicted_knn),4)
 
 # create ROC plot
-ggroc(rocobj, colour = 'steelblue', size = 2) +
-  ggtitle(paste0('ROC Curve ', '(AUC = ', auc, ')'))
+ggroc(rocobj_knn, colour = 'steelblue', size = 2) +
+  ggtitle(paste0('ROC Curve ', '(AUC = ', auc_knn, ')'))
 ```
 ## {-}
 
@@ -562,27 +566,48 @@ accuracy(xgb_conf_mat)
 # Confusion matrix and stats
 confusionMatrix(factor(xgb_train_preds$max), factor(train_labs + 1))
 ```
+### ROC Curve
 ```{r, results='hide', warning=FALSE, fig.width=10}
 # define object to plot and calculate AUC
 predicted_xgb <- factor(xgb_train_preds$max, ordered = TRUE)
-rocobj <- roc(factor(train_labs + 1), predicted_xgb)
-auc <- round(auc(factor(train_labs + 1), predicted_xgb),4)
+rocobj_xgb <- roc(factor(train_labs + 1), predicted_xgb)
+auc_xgb <- round(auc(factor(train_labs + 1), predicted_xgb),4)
 
 # create ROC plot
-ggroc(rocobj, colour = 'steelblue', size = 2) +
-  ggtitle(paste0('ROC Curve ', '(AUC = ', auc, ')'))
+ggroc(rocobj_xgb, colour = 'steelblue', size = 2) +
+  ggtitle(paste0('ROC Curve ', '(AUC = ', auc_xgb, ')'))
 ```
 ## {-}
 
 ## **IV. Model Selection** {#IV}
 
+### Comparing Accuracy {#IV.1}
 ```{r}
-# plotting.comparing model results
-
-# analyze model accuracy
-
-# model selection
-
+cat('MEAN ACCURACY:',
+paste0('Logistic Regression: ', mean(pred_classes_glm == test_data$WPERC_b)),
+paste0('Support Vector Machines: ', mean(pred_classes_svm == test_data$WPERC_b)),
+paste0('Decision Tree: ', mean(pred_classes_tree == test_data$WPERC_b)),
+paste0('K-Nearest Neighbors: ', accuracy(tb_knn)),
+paste0('XGBoost: ', accuracy(xgb_conf_mat)), 
+sep = '\n')
 ```
 
+### Comparing AUC {#IV.2}
+```{r}
+cat('AUC:',
+paste0('Logistic Regression: ', auc_glm),
+paste0('Support Vector Machines: ', auc_svm),
+paste0('Decision Tree: ', auc_tree),
+paste0('K-Nearest Neighbors: ', auc_knn),
+paste0('XGBoost: ', auc_xgb), 
+sep = '\n')
+```
+
+### Conclusions {#IV.3}
+| - All models perform decently, with ~0.60 mean accuracy, and ~0.80 AUC
+| - SVM has the highest mean accuracy, with Logistic Regression performing slightly worse
+| - Logistic Regression has the best AUC, with SVM slightly lower
+| - The best model is between SVM and Logistic Regression. 
+
+<br>
 
