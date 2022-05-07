@@ -323,10 +323,6 @@ cbb_glm <- multinom(WPERC_b ~ ., data = train_data)
 # call model
 summary(cbb_glm)
 ```
-### Plot Model
-```{r fig.width=10}
-# blank for now
-```
 
 ### Test Model
 ```{r}
@@ -351,33 +347,6 @@ ggroc(rocobj_glm, colour = 'steelblue', size = 2) +
 ```
 ## {-}
 
-```{r}
-
-#cbb3<-cbb
-# All teams that missed the playoffs are given a value of 0
-#cbb3$SEED[cbb3$SEED==100]<-0
-# All teams that made the playoffs are given a value of 1
-#cbb3$SEED[cbb3$SEED>0]<-1
-#View(cbb3)
-# subset with needed variables
-#cbb3_mod <- subset(cbb3, select=c(SEED, W, ADJOE, ADJDE, EFG_O, EFG_D, DRB))
-
-# randomly split data 70/30
-#set.seed(123)
-#ind <- sample(2, nrow(cbb3_mod), replace=TRUE, prob=(c(0.7,0.3)))
-#train_data_cbb3 <- cbb3_mod[ind==1,]
-#test_data_cbb3 <- cbb3_mod[ind==2,]
-
-
-#cbblmBinary<-glm(SEED~W, data =train_data_cbb3, family="binomial")
-#summary(cbblmBinary)
-# Make predictions
-#pred_classes_lmBin <- cbblmBinary %>% predict(test_data_cbb3)
-# Model accuracy
-#pred_
-```
-
-
 ## 2. SVM {#III.2}
 ## {.tabset}
 
@@ -388,10 +357,6 @@ cbb_svm = svm(WPERC_b ~ ., data = train_data, type="C-classification", kernal="r
 summary(cbb_svm)
 ```
 
-### Plot Model
-```{r fig.width=10}
-plot(cbb_svm, train_data, EFG_D~BARTHAG)
-```
 
 ### Test Model
 ```{r}
@@ -430,7 +395,7 @@ summary(cbb_tree)
 ```
 
 ### Plot Model
-```{r fig.width=10}
+```{r fig.width=20}
 plot(cbb_tree)
 ```
 
@@ -481,10 +446,6 @@ cbb_knn <- knn(train_data_norm, test_data_norm, class_train, k = nbins)
 
 # call model
 summary(cbb_knn)
-```
-### Plot Model
-```{r fig.width=10}
-# blank for now
 ```
 
 ### Test Model
@@ -548,12 +509,6 @@ xgb_train_preds <- data.frame(xgbcv$pred) %>% mutate(max = max.col(., ties.metho
 # Examine output
 head(xgb_train_preds)
 ```
-
-### Plot Model
-```{r fig.width=10}
-# blank for now
-```
-
 
 ### Test Model
 ```{r}
