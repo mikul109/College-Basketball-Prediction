@@ -325,7 +325,7 @@ summary(cbb_glm)
 ```
 ### Plot Model
 ```{r fig.width=10}
-
+# blank for now
 ```
 
 ### Test Model
@@ -484,7 +484,7 @@ summary(cbb_knn)
 ```
 ### Plot Model
 ```{r fig.width=10}
-
+# blank for now
 ```
 
 ### Test Model
@@ -551,7 +551,7 @@ head(xgb_train_preds)
 
 ### Plot Model
 ```{r fig.width=10}
-
+# blank for now
 ```
 
 
@@ -604,7 +604,9 @@ sep = '\n')
 ```
 
 ### Conclusions {#IV.3}
-| - All models perform decently, with ~0.60 mean accuracy, and ~0.80 AUC
+| - All models perform okay, with ~0.60 mean accuracy, and ~0.80 AUC
+| - This is expected given how unpredictable college basketball is, and since advanced stats do not directly
+|   predict wins, as shown in the variable selection section.
 | - SVM has the highest mean accuracy, with Logistic Regression performing slightly worse
 | - Logistic Regression has the best AUC, with SVM slightly lower
 | - The best model is between SVM and Logistic Regression. 
