@@ -261,7 +261,6 @@ test_data <- cbb_mod[ind==2,]
 Before running models, I am going to create a baseline accuracy. Since this dataset is dominated by teams not making the tournament, the results from the models should be more than this percent:
 ```{r}
 ###### not needed?
-View(cbb)
 nrow(cbb[cbb$SEED==100])/nrow(cbb)
 ```
 
@@ -284,6 +283,31 @@ pred_classes_glm <- cbb_glm %>% predict(test_data)
 # Model accuracy
 mean(pred_classes_glm == test_data$WPERC_b)
 ```
+```{r}
+
+cbb1<-cbb
+# All teams that missed the playoffs are given a value of 0
+cbb1$SEED[cbb1$SEED==100]<-0
+# All teams that made the playoffs are given a value of 1
+cbb1$SEED[cbb1$SEED>0]<-1
+View(cbb1)
+# subset with needed variables
+cbb1_mod <- subset(cbb1, select=c(SEED, W, ADJOE, ADJDE, EFG_O, EFG_D, DRB))
+
+# randomly split data 70/30
+set.seed(123)
+ind <- sample(2, nrow(cbb1_mod), replace=TRUE, prob=(c(0.7,0.3)))
+train_data_cbb1 <- cbb1_mod[ind==1,]
+test_data_cbb1 <- cbb1_mod[ind==2,]
+
+
+cbblmBinary<-glm(SEED~W, data =train_data_cbb1, family="binomial")
+summary(cbblmBinary)
+# Make predictions
+pred_classes_lmBin <- cbblmBinary %>% predict(test_data_cbb1)
+# Model accuracy
+pred_
+```
 
 
 ### 2. SVM {#III.2}
@@ -304,6 +328,12 @@ mean(pred_classes_svm == test_data$WPERC_b)
 
 ```
 
+```{r}
+plot(cbb_svm, train_data, EFG_O~TOR)
+plot(W~ADJOE,data=cbb)
+```
+
+
 
 ### 3. Decision Tree {#III.3}
 
@@ -315,6 +345,12 @@ cbb_tree <- ctree(WPERC_b ~ ., data = train_data)
 # call model
 summary(cbb_tree)
 ```
+
+
+```{r}
+plot(cbb_tree)
+```
+
 
 Test Model
 ```{r}
