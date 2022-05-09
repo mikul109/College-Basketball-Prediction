@@ -209,7 +209,7 @@ ggplot(cbb) +
 ```
 ## {-}
 
-## **II. Data preprocessing** {#II}
+## **II. Data Preprocessing** {#II}
 
 ## 1. Data Cleaning {#II.1}
 
@@ -338,12 +338,14 @@ confusionMatrix(pred_classes_glm, test_data$WPERC_b)
 ```{r, results='hide', warning=FALSE, fig.width=10}
 # define object to plot and calculate AUC
 predicted_glm <- factor(pred_classes_glm, ordered = TRUE)
-rocobj_glm <- roc(test_data$WPERC_b, predicted_glm)
+rocobj_glm <- multiclass.roc(test_data$WPERC_b, predicted_glm)
 auc_glm <- round(auc(test_data$WPERC_b, predicted_glm),4)
 
 # create ROC plot
-ggroc(rocobj_glm, colour = 'steelblue', size = 2) +
-  ggtitle(paste0('ROC Curve ', '(AUC = ', auc_glm, ')'))
+# multi-class AUC as defined by Hand and Till
+roc_glm <- rocobj_glm[['rocs']]
+plot.roc(roc_glm[[1]], print.auc=TRUE)
+sapply(2:length(roc_glm), function(i) lines.roc(roc_glm[[i]], col=i))
 ```
 ## {-}
 
@@ -357,6 +359,11 @@ cbb_svm = svm(WPERC_b ~ ., data = train_data, type="C-classification", kernal="r
 summary(cbb_svm)
 ```
 
+### Plot Model
+Predictors chosen: ADJOE vs ADJDE
+```{r fig.width=10}
+plot(cbb_svm, data = train_data, ADJDE ~ ADJOE)
+```
 
 ### Test Model
 ```{r}
@@ -373,12 +380,14 @@ confusionMatrix(pred_classes_svm, test_data$WPERC_b)
 ```{r, results='hide', warning=FALSE, fig.width=10}
 # define object to plot and calculate AUC
 predicted_svm <- factor(pred_classes_svm, ordered = TRUE)
-rocobj_svm <- roc(test_data$WPERC_b, predicted_svm)
+rocobj_svm <- multiclass.roc(test_data$WPERC_b, predicted_svm)
 auc_svm <- round(auc(test_data$WPERC_b, predicted_svm),4)
 
 # create ROC plot
-ggroc(rocobj_svm, colour = 'steelblue', size = 2) +
-  ggtitle(paste0('ROC Curve ', '(AUC = ', auc_svm, ')'))
+# multi-class AUC as defined by Hand and Till
+roc_svm <- rocobj_svm[['rocs']]
+plot.roc(roc_svm[[1]], print.auc=TRUE)
+sapply(2:length(roc_svm), function(i) lines.roc(roc_svm[[i]], col=i))
 ```
 ## {-}
 
@@ -414,12 +423,14 @@ confusionMatrix(pred_classes_tree, test_data$WPERC_b)
 ```{r, results='hide', warning=FALSE, fig.width=10}
 # define object to plot and calculate AUC
 predicted_tree <- factor(pred_classes_tree, ordered = TRUE)
-rocobj_tree <- roc(test_data$WPERC_b, predicted_tree)
+rocobj_tree <- multiclass.roc(test_data$WPERC_b, predicted_tree)
 auc_tree <- round(auc(test_data$WPERC_b, predicted_tree),4)
 
 # create ROC plot
-ggroc(rocobj_tree, colour = 'steelblue', size = 2) +
-  ggtitle(paste0('ROC Curve ', '(AUC = ', auc_tree, ')'))
+# multi-class AUC as defined by Hand and Till
+roc_tree <- rocobj_tree[['rocs']]
+plot.roc(roc_tree[[1]], print.auc=TRUE)
+sapply(2:length(roc_tree), function(i) lines.roc(roc_tree[[i]], col=i))
 ```
 ## {-}
 
@@ -464,12 +475,14 @@ confusionMatrix(cbb_knn, test_data$WPERC_b)
 ```{r, results='hide', warning=FALSE, fig.width=10}
 # define object to plot and calculate AUC
 predicted_knn <- factor(cbb_knn, ordered = TRUE)
-rocobj_knn <- roc(test_data$WPERC_b, predicted_knn)
+rocobj_knn <- multiclass.roc(test_data$WPERC_b, predicted_knn)
 auc_knn <- round(auc(test_data$WPERC_b, predicted_knn),4)
 
 # create ROC plot
-ggroc(rocobj_knn, colour = 'steelblue', size = 2) +
-  ggtitle(paste0('ROC Curve ', '(AUC = ', auc_knn, ')'))
+# multi-class AUC as defined by Hand and Till
+roc_knn <- rocobj_knn[['rocs']]
+plot.roc(roc_knn[[1]], print.auc=TRUE)
+sapply(2:length(roc_knn), function(i) lines.roc(roc_knn[[i]], col=i))
 ```
 ## {-}
 
@@ -478,7 +491,7 @@ ggroc(rocobj_knn, colour = 'steelblue', size = 2) +
 ## {.tabset}
 
 ### Build Model
-```{r}
+```{r warning=FALSE}
 # Create numeric labels with one-hot encoding
 train_labs <- as.numeric(train_data$WPERC_b) - 1
 test_labs <- as.numeric(test_data$WPERC_b) - 1
@@ -525,12 +538,14 @@ confusionMatrix(factor(xgb_train_preds$max), factor(train_labs + 1))
 ```{r, results='hide', warning=FALSE, fig.width=10}
 # define object to plot and calculate AUC
 predicted_xgb <- factor(xgb_train_preds$max, ordered = TRUE)
-rocobj_xgb <- roc(factor(train_labs + 1), predicted_xgb)
+rocobj_xgb <- multiclass.roc(factor(train_labs + 1), predicted_xgb)
 auc_xgb <- round(auc(factor(train_labs + 1), predicted_xgb),4)
 
 # create ROC plot
-ggroc(rocobj_xgb, colour = 'steelblue', size = 2) +
-  ggtitle(paste0('ROC Curve ', '(AUC = ', auc_xgb, ')'))
+# multi-class AUC as defined by Hand and Till
+roc_xgb <- rocobj_xgb[['rocs']]
+plot.roc(roc_xgb[[1]], print.auc=TRUE)
+sapply(2:length(roc_xgb), function(i) lines.roc(roc_xgb[[i]], col=i))
 ```
 ## {-}
 
